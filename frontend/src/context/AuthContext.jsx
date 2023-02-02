@@ -1,6 +1,8 @@
 import { createContext, useState, useEffect } from "react";
 import jwt_decode from "jwt-decode";
 import { useNavigate } from "react-router-dom";
+import useAxios from "../utils/useAxios";
+import axios from "axios";
 
 const AuthContext = createContext();
 
@@ -19,20 +21,19 @@ export const AuthProvider = ({ children }) => {
 
   let loginUser = async (e) => {
     e.preventDefault();
-    let response = await fetch("http://127.0.0.1:8000/api/token/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ username: e.target.username.value, password: e.target.password.value }),
-    });
-    let data = await response.json();
+    const response = await axios.post(
+      "http://127.0.0.1:8000/api/token/",
+      JSON.stringify({ username: e.target.username.value, password: e.target.password.value }),
+      {
+        headers: { "Content-Type": "application/json" },
+      }
+    );
 
     if (response.status === 200) {
-      setUserToken(data.access);
-      setRefreshToken(data.refresh);
-      setUser(jwt_decode(data.access));
-      localStorage.setItem("authTokens", JSON.stringify(data));
+      setUserToken(response.data.access);
+      setRefreshToken(response.data.refresh);
+      setUser(jwt_decode(response.data.access));
+      localStorage.setItem("authTokens", JSON.stringify(response.data));
       navigate("/");
     } else {
       alert("Something went wrong!");
@@ -46,31 +47,12 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("authTokens");
     navigate("/login");
   };
-
-  let updateToken = async () => {
-    let response = await fetch("http://127.0.0.1:8000/api/token/refresh/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ refresh: refreshToken }),
-    });
-
-    let data = await response.json();
-
-    if (response.status === 200) {
-      setUserToken(data.access);
-      setRefreshToken(data.refresh);
-      setUser(jwt_decode(data.access));
-      localStorage.setItem("authTokens", JSON.stringify(data));
-    } else {
-      logoutUser();
+  useEffect(() => {
+    if (userToken) {
+      setUser(jwt_decode(userToken));
     }
-
-    if (loading) {
-      setLoading(false);
-    }
-  };
+    setLoading(false);
+  }, [userToken, loading]);
 
   let contextData = {
     user: user,
@@ -79,18 +61,5 @@ export const AuthProvider = ({ children }) => {
     logoutUser: logoutUser,
   };
 
-  useEffect(() => {
-    if (loading) {
-      updateToken();
-    }
-
-    let interval = setInterval(() => {
-      if (userToken) {
-        updateToken();
-      }
-    }, 1000 * 60 * 4.8);
-    return () => clearInterval(interval);
-  }, [userToken, loading]);
-
-  return <AuthContext.Provider value={contextData}>{loading ? null : children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={contextData}>{children}</AuthContext.Provider>;
 };
